@@ -473,6 +473,7 @@ impl File {
         op.await
     }
 
+    #[allow(missing_docs)]
     pub fn unsubmitted_read_fixed_at<T>(&self, buf: T, pos: u64) -> UnsubmittedRead<T>
     where
         T: BoundedBufMut<BufMut = FixedBuf>,
@@ -480,6 +481,7 @@ impl File {
         UnsubmittedOneshot::read_fixed_at(&self.fd, buf, pos)
     }
 
+    #[allow(missing_docs)]
     pub fn unsubmitted_read_fixed_at_with_index<T>(
         &self,
         buf: T,
@@ -676,6 +678,7 @@ impl File {
         op.await
     }
 
+    #[allow(missing_docs)]
     pub fn unsubmitted_write_fixed_at<T>(&self, buf: T, pos: u64) -> UnsubmittedWrite<T>
     where
         T: BoundedBuf<Buf = FixedBuf>,
@@ -683,6 +686,7 @@ impl File {
         UnsubmittedOneshot::write_fixed_at(&self.fd, buf, pos)
     }
 
+    #[allow(missing_docs)]
     pub fn unsubmitted_write_fixed_at_with_index<T>(
         &self,
         buf: T,
