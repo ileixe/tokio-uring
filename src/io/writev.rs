@@ -1,5 +1,5 @@
-use crate::{buf::BoundedBuf, io::SharedFd, BufResult};
-use crate::{OneshotOutputTransform, UnsubmittedOneshot};
+use crate::{buf::BoundedBuf, io::SharedFd, Result};
+use crate::{OneshotOutputTransform, UnsubmittedOneshot, WithBuffer};
 use io_uring::cqueue::Entry;
 use libc::iovec;
 use std::io;
@@ -31,7 +31,7 @@ impl<T> OneshotOutputTransform for WritevTransform<T>
 where
     T: BoundedBuf,
 {
-    type Output = BufResult<usize, Vec<T>>;
+    type Output = Result<usize, Vec<T>>;
     type StoredData = WritevData<T>;
 
     fn transform_oneshot_output(self, data: Self::StoredData, cqe: Entry) -> Self::Output {
@@ -41,7 +41,7 @@ where
             Err(io::Error::from_raw_os_error(-cqe.result()))
         };
 
-        (res, data.bufs)
+        res.with_buffer(data.bufs)
     }
 }
 

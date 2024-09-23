@@ -29,8 +29,7 @@ use std::{
 ///         let mut stream = UnixStream::connect("/tmp/tokio-uring-unix-test.sock").await?;
 ///
 ///         // Write some data.
-///         let (result, _) = stream.write(b"hello world!".as_slice()).submit().await;
-///         result.unwrap();
+///         stream.write(b"hello world!".as_slice()).submit().await.unwrap();
 ///
 ///         Ok(())
 ///     })
@@ -76,7 +75,7 @@ impl UnixStream {
 
     /// Read some data from the stream into the buffer, returning the original buffer and
     /// quantity of data read.
-    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::BufResult<usize, T> {
+    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::Result<usize, T> {
         self.inner.read(buf).await
     }
 
@@ -91,7 +90,7 @@ impl UnixStream {
     /// In addition to errors that can be reported by `read`,
     /// this operation fails if the buffer is not registered in the
     /// current `tokio-uring` runtime.
-    pub async fn read_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub async fn read_fixed<T>(&self, buf: T) -> crate::Result<usize, T>
     where
         T: BoundedBufMut<BufMut = FixedBuf>,
     {
@@ -117,7 +116,7 @@ impl UnixStream {
     /// This function will return the first error that [`write`] returns.
     ///
     /// [`write`]: Self::write
-    pub async fn write_all<T: BoundedBuf>(&self, buf: T) -> crate::BufResult<(), T> {
+    pub async fn write_all<T: BoundedBuf>(&self, buf: T) -> crate::Result<(), T> {
         self.inner.write_all(buf).await
     }
 
@@ -132,7 +131,7 @@ impl UnixStream {
     /// In addition to errors that can be reported by `write`,
     /// this operation fails if the buffer is not registered in the
     /// current `tokio-uring` runtime.
-    pub async fn write_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub async fn write_fixed<T>(&self, buf: T) -> crate::Result<usize, T>
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {
@@ -152,7 +151,7 @@ impl UnixStream {
     /// This function will return the first error that [`write_fixed`] returns.
     ///
     /// [`write_fixed`]: Self::write
-    pub async fn write_fixed_all<T>(&self, buf: T) -> crate::BufResult<(), T>
+    pub async fn write_fixed_all<T>(&self, buf: T) -> crate::Result<(), T>
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {
@@ -183,7 +182,7 @@ impl UnixStream {
     /// written to this writer.
     ///
     /// [`Ok(n)`]: Ok
-    pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::BufResult<usize, Vec<T>> {
+    pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::Result<usize, Vec<T>> {
         self.inner.writev(buf).await
     }
 

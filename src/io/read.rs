@@ -2,7 +2,7 @@ use io_uring::cqueue::Entry;
 
 use crate::buf::BoundedBufMut;
 use crate::io::SharedFd;
-use crate::{BufResult, OneshotOutputTransform, UnsubmittedOneshot};
+use crate::{OneshotOutputTransform, Result, UnsubmittedOneshot, WithBuffer};
 
 use std::io;
 use std::marker::PhantomData;
@@ -28,7 +28,7 @@ impl<T> OneshotOutputTransform for ReadTransform<T>
 where
     T: BoundedBufMut,
 {
-    type Output = BufResult<usize, T>;
+    type Output = Result<usize, T>;
     type StoredData = ReadData<T>;
 
     fn transform_oneshot_output(self, mut data: Self::StoredData, cqe: Entry) -> Self::Output {
@@ -41,7 +41,7 @@ where
             Err(io::Error::from_raw_os_error(-n))
         };
 
-        (res, data.buf)
+        res.with_buffer(data.buf)
     }
 }
 

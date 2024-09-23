@@ -1,5 +1,5 @@
 use crate::buf::BoundedBufMut;
-use crate::{BufResult, OneshotOutputTransform, UnsubmittedOneshot};
+use crate::{OneshotOutputTransform, Result, UnsubmittedOneshot, WithBuffer};
 
 use crate::io::SharedFd;
 use io_uring::cqueue::Entry;
@@ -34,7 +34,7 @@ impl<T> OneshotOutputTransform for ReadvTransform<T>
 where
     T: BoundedBufMut,
 {
-    type Output = BufResult<usize, Vec<T>>;
+    type Output = Result<usize, Vec<T>>;
     type StoredData = ReadvData<T>;
 
     fn transform_oneshot_output(self, data: Self::StoredData, cqe: Entry) -> Self::Output {
@@ -61,7 +61,7 @@ where
             Err(io::Error::from_raw_os_error(-cqe.result()))
         };
 
-        (res, bufs)
+        res.with_buffer(bufs)
     }
 }
 

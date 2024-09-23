@@ -10,7 +10,7 @@ pub(crate) mod driver;
 pub(crate) use context::RuntimeContext;
 
 thread_local! {
-    pub static CONTEXT: RuntimeContext = RuntimeContext::new();
+    pub static CONTEXT: RuntimeContext = const { RuntimeContext::new() };
 }
 
 /// The Runtime Executor

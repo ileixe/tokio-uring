@@ -44,22 +44,18 @@ use std::{
 ///         let buf = vec![0; 32];
 ///
 ///         // write data
-///         let (result, _) = socket.write(b"hello world".as_slice()).submit().await;
-///         result.unwrap();
+///         socket.write(b"hello world".as_slice()).submit().await.unwrap();
 ///
 ///         // read data
-///         let (result, buf) = other_socket.read(buf).await;
-///         let n_bytes = result.unwrap();
+///         let (n_bytes, buf) = other_socket.read(buf).await.unwrap();
 ///
 ///         assert_eq!(b"hello world", &buf[..n_bytes]);
 ///
 ///         // write data using send on connected socket
-///         let (result, _) = socket.send(b"hello world via send".as_slice()).await;
-///         result.unwrap();
+///         socket.send(b"hello world via send".as_slice()).await.unwrap();
 ///
 ///         // read data
-///         let (result, buf) = other_socket.read(buf).await;
-///         let n_bytes = result.unwrap();
+///         let (n_bytes, buf) = other_socket.read(buf).await.unwrap();
 ///
 ///         assert_eq!(b"hello world via send", &buf[..n_bytes]);
 ///
@@ -84,12 +80,10 @@ use std::{
 ///         let buf = vec![0; 32];
 ///
 ///         // write data
-///         let (result, _) = socket.send_to(b"hello world".as_slice(), second_addr).await;
-///         result.unwrap();
+///         socket.send_to(b"hello world".as_slice(), second_addr).await.unwrap();
 ///
 ///         // read data
-///         let (result, buf) = other_socket.recv_from(buf).await;
-///         let (n_bytes, addr) = result.unwrap();
+///         let ((n_bytes, addr), buf) = other_socket.recv_from(buf).await.unwrap();
 ///
 ///         assert_eq!(addr, first_addr);
 ///         assert_eq!(b"hello world", &buf[..n_bytes]);
@@ -173,14 +167,13 @@ impl UdpSocket {
     ///         let buf = vec![0; 32];
     ///
     ///         // write data
-    ///         let (result, _) = std_socket
+    ///         std_socket
     ///             .send_to(b"hello world".as_slice(), second_addr)
-    ///             .await;
-    ///         result.unwrap();
+    ///             .await
+    ///             .unwrap();
     ///
     ///         // read data
-    ///         let (result, buf) = other_socket.recv_from(buf).await;
-    ///         let (n_bytes, addr) = result.unwrap();
+    ///         let ((n_bytes, addr), buf) = other_socket.recv_from(buf).await.unwrap();
     ///
     ///         assert_eq!(addr, std_addr);
     ///         assert_eq!(b"hello world", &buf[..n_bytes]);
@@ -213,7 +206,7 @@ impl UdpSocket {
     /// Sends data on the connected socket
     ///
     /// On success, returns the number of bytes written.
-    pub async fn send<T: BoundedBuf>(&self, buf: T) -> crate::BufResult<usize, T> {
+    pub async fn send<T: BoundedBuf>(&self, buf: T) -> crate::Result<usize, T> {
         self.inner.send_to(buf, None).await
     }
 
@@ -224,7 +217,7 @@ impl UdpSocket {
         &self,
         buf: T,
         socket_addr: SocketAddr,
-    ) -> crate::BufResult<usize, T> {
+    ) -> crate::Result<usize, T> {
         self.inner.send_to(buf, Some(socket_addr)).await
     }
 
@@ -241,7 +234,7 @@ impl UdpSocket {
     /// > at writes over around 10 KB.
     ///
     /// Note: Using fixed buffers [#54](https://github.com/tokio-rs/tokio-uring/pull/54), avoids the page-pinning overhead
-    pub async fn send_zc<T: BoundedBuf>(&self, buf: T) -> crate::BufResult<usize, T> {
+    pub async fn send_zc<T: BoundedBuf>(&self, buf: T) -> crate::Result<usize, T> {
         self.inner.send_zc(buf).await
     }
 
@@ -300,7 +293,7 @@ impl UdpSocket {
     pub async fn recv_from<T: BoundedBufMut>(
         &self,
         buf: T,
-    ) -> crate::BufResult<(usize, SocketAddr), T> {
+    ) -> crate::Result<(usize, SocketAddr), T> {
         self.inner.recv_from(buf).await
     }
 
@@ -310,14 +303,14 @@ impl UdpSocket {
     pub async fn recvmsg<T: BoundedBufMut>(
         &self,
         buf: Vec<T>,
-    ) -> crate::BufResult<(usize, SocketAddr), Vec<T>> {
+    ) -> crate::Result<(usize, SocketAddr), Vec<T>> {
         self.inner.recvmsg(buf).await
     }
 
     /// Reads a packet of data from the socket into the buffer.
     ///
     /// Returns the original buffer and quantity of data read.
-    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::BufResult<usize, T> {
+    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::Result<usize, T> {
         self.inner.read(buf).await
     }
 
@@ -334,7 +327,7 @@ impl UdpSocket {
     /// In addition to errors that can be reported by `read`,
     /// this operation fails if the buffer is not registered in the
     /// current `tokio-uring` runtime.
-    pub async fn read_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub async fn read_fixed<T>(&self, buf: T) -> crate::Result<usize, T>
     where
         T: BoundedBufMut<BufMut = FixedBuf>,
     {
@@ -361,7 +354,7 @@ impl UdpSocket {
     /// In addition to errors that can be reported by `write`,
     /// this operation fails if the buffer is not registered in the
     /// current `tokio-uring` runtime.
-    pub async fn write_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub async fn write_fixed<T>(&self, buf: T) -> crate::Result<usize, T>
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {

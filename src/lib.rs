@@ -21,8 +21,7 @@
 //!         // Read some data, the buffer is passed by ownership and
 //!         // submitted to the kernel. When the operation completes,
 //!         // we get the buffer back.
-//!         let (res, buf) = file.read_at(buf, 0).submit().await;
-//!         let n = res?;
+//!         let (n, buf) = file.read_at(buf, 0).submit().await?;
 //!
 //!         // Display the contents
 //!         println!("{:?}", &buf[..n]);
@@ -74,6 +73,7 @@ macro_rules! syscall {
 mod future;
 mod io;
 pub mod runtime;
+mod types;
 
 pub mod buf;
 pub mod fs;
@@ -89,6 +89,7 @@ pub use runtime::driver::op::{
 };
 pub use runtime::spawn;
 pub use runtime::Runtime;
+pub use types::*;
 
 use crate::runtime::driver::op::Op;
 use std::future::Future;
@@ -123,8 +124,7 @@ use std::future::Future;
 ///         // Read some data, the buffer is passed by ownership and
 ///         // submitted to the kernel. When the operation completes,
 ///         // we get the buffer back.
-///         let (res, buf) = file.read_at(buf, 0).submit().await;
-///         let n = res?;
+///         let (n, buf) = file.read_at(buf, 0).submit().await?;
 ///
 ///         // Display the contents
 ///         println!("{:?}", &buf[..n]);
@@ -240,40 +240,6 @@ impl Builder {
         rt.block_on(future)
     }
 }
-
-/// A specialized `Result` type for `io-uring` operations with buffers.
-///
-/// This type is used as a return value for asynchronous `io-uring` methods that
-/// require passing ownership of a buffer to the runtime. When the operation
-/// completes, the buffer is returned whether or not the operation completed
-/// successfully.
-///
-/// # Examples
-///
-/// ```no_run
-/// use tokio_uring::fs::File;
-/// use tokio_uring::Submit;
-///
-/// fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     tokio_uring::start(async {
-///         // Open a file
-///         let file = File::open("hello.txt").await?;
-///
-///         let buf = vec![0; 4096];
-///         // Read some data, the buffer is passed by ownership and
-///         // submitted to the kernel. When the operation completes,
-///         // we get the buffer back.
-///         let (res, buf) = file.read_at(buf, 0).submit().await;
-///         let n = res?;
-///
-///         // Display the contents
-///         println!("{:?}", &buf[..n]);
-///
-///         Ok(())
-///     })
-/// }
-/// ```
-pub type BufResult<T, B> = (std::io::Result<T>, B);
 
 /// The simplest possible operation. Just posts a completion event, nothing else.
 ///
