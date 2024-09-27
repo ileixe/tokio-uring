@@ -72,6 +72,7 @@ macro_rules! syscall {
 #[macro_use]
 mod future;
 mod io;
+#[allow(missing_docs)]
 pub mod runtime;
 mod types;
 

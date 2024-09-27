@@ -125,13 +125,13 @@ impl Driver {
     }
 
     pub(crate) fn register_files(&mut self, fds: &[RawFd]) -> io::Result<()> {
-        unsafe { self.uring.submitter().register_files(fds) }?;
+        self.uring.submitter().register_files(fds)?;
 
         Ok(())
     }
 
     pub(crate) fn unregister_files(&mut self) -> io::Result<()> {
-        unsafe { self.uring.submitter().unregister_files() }?;
+        self.uring.submitter().unregister_files()?;
 
         Ok(())
     }
