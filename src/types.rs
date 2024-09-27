@@ -10,20 +10,21 @@ use std::fmt::{Debug, Display};
 ///
 /// ```no_run
 /// use tokio_uring::fs::File;
+/// use tokio_uring::Submit;
 ///
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     tokio_uring::start(async {
 ///         // Open a file
 ///         let file = File::open("hello.txt").await?;
 ///
-///         let buf = vec![0; 4096];
+///         let buf = vec![0; 4096].into();
 ///         // Read some data, the buffer is passed by ownership and
 ///         // submitted to the kernel. When the operation completes,
 ///         // we get the buffer back.
-///         let (n, buf) = file.read_at(buf, 0).await?;
+///         let (n, buf) = file.read_at(buf, 0).submit().await?;
 ///
 ///         // Display the contents
-///         println!("{:?}", &buf[..n]);
+///         println!("{:?}", &buf[0][..n]);
 ///
 ///         Ok(())
 ///     })

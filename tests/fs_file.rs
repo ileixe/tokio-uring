@@ -18,10 +18,10 @@ mod future;
 const HELLO: &[u8] = b"hello world...";
 
 async fn read_hello(file: &File) {
-    let buf = Vec::with_capacity(1024);
+    let buf = Vec::<u8>::with_capacity(1024).into();
     let (n, buf) = file.read_at(buf, 0).submit().await.unwrap();
     assert_eq!(n, HELLO.len());
-    assert_eq!(&buf[..n], HELLO);
+    assert_eq!(&buf[0][..n], HELLO);
 }
 
 #[test]
@@ -36,28 +36,16 @@ fn basic_read() {
 }
 
 #[test]
-fn basic_read_exact() {
-    tokio_uring::start(async {
-        let data = HELLO.repeat(1000);
-        let buf = Vec::with_capacity(data.len());
-
-        let mut tempfile = tempfile();
-        tempfile.write_all(&data).unwrap();
-
-        let file = File::open(tempfile.path()).await.unwrap();
-        let (_, buf) = file.read_exact_at(buf, 0).await.unwrap();
-        assert_eq!(buf, data);
-    });
-}
-
-#[test]
 fn basic_write() {
     tokio_uring::start(async {
         let tempfile = tempfile();
 
         let file = File::create(tempfile.path()).await.unwrap();
 
-        file.write_at(HELLO, 0).submit().await.unwrap();
+        file.write_at(HELLO.to_vec().into(), 0)
+            .submit()
+            .await
+            .unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, HELLO);
@@ -71,8 +59,8 @@ fn vectored_read() {
         tempfile.write_all(HELLO).unwrap();
 
         let file = File::open(tempfile.path()).await.unwrap();
-        let bufs = vec![Vec::<u8>::with_capacity(5), Vec::<u8>::with_capacity(9)];
-        let (n, bufs) = file.readv_at(bufs, 0).submit().await.unwrap();
+        let bufs = vec![Vec::<u8>::with_capacity(5), Vec::<u8>::with_capacity(9)].into();
+        let (n, bufs) = file.read_at(bufs, 0).submit().await.unwrap();
 
         assert_eq!(n, HELLO.len());
         assert_eq!(bufs[1][0], b' ');
@@ -87,27 +75,12 @@ fn vectored_write() {
         let file = File::create(tempfile.path()).await.unwrap();
         let buf1 = "hello".to_owned().into_bytes();
         let buf2 = " world...".to_owned().into_bytes();
-        let bufs = vec![buf1, buf2];
+        let bufs = vec![buf1, buf2].into();
 
-        file.writev_at(bufs, 0).submit().await.0.unwrap();
+        file.write_at(bufs, 0).submit().await.unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, HELLO);
-    });
-}
-
-#[test]
-fn basic_write_all() {
-    tokio_uring::start(async {
-        let data = HELLO.repeat(1000);
-
-        let tempfile = tempfile();
-
-        let file = File::create(tempfile.path()).await.unwrap();
-        let (_, data) = file.write_all_at(data, 0).await.unwrap();
-
-        let file = std::fs::read(tempfile.path()).unwrap();
-        assert_eq!(file, data);
     });
 }
 
@@ -150,7 +123,10 @@ fn drop_open() {
         // Do something else
         let file = File::create(tempfile.path()).await.unwrap();
 
-        file.write_at(HELLO, 0).submit().await.unwrap();
+        file.write_at(HELLO.to_vec().into(), 0)
+            .submit()
+            .await
+            .unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, HELLO);
@@ -178,7 +154,10 @@ fn sync_doesnt_kill_anything() {
         let file = File::create(tempfile.path()).await.unwrap();
         file.sync_all().await.unwrap();
         file.sync_data().await.unwrap();
-        file.write_at(&b"foo"[..], 0).submit().await.unwrap();
+        file.write_at("foo".to_owned().into_bytes().into(), 0)
+            .submit()
+            .await
+            .unwrap();
         file.sync_all().await.unwrap();
         file.sync_data().await.unwrap();
     });
@@ -307,47 +286,21 @@ fn basic_fallocate() {
 }
 
 #[test]
-fn read_linked() {
-    tokio_uring::start(async {
-        let mut tempfile = tempfile();
-        let file = File::open(tempfile.path()).await.unwrap();
-
-        tempfile.write_all(&[HELLO, HELLO].concat()).unwrap();
-
-        let buf1 = Vec::with_capacity(HELLO.len());
-        let buf2 = Vec::with_capacity(HELLO.len());
-
-        let read1 = file.read_at(buf1, 0);
-        let read2 = file.read_at(buf2, HELLO.len() as u64);
-
-        let future1 = read1.link(read2).submit();
-
-        let (res1, future2) = future1.await;
-        let res2 = future2.await;
-
-        res1.0.unwrap();
-        res2.0.unwrap();
-
-        assert_eq!([HELLO, HELLO].concat(), [res1.1, res2.1].concat());
-    });
-}
-
-#[test]
 fn write_linked() {
     tokio_uring::start(async {
         let tempfile = tempfile();
         let file = File::create(tempfile.path()).await.unwrap();
 
-        let write1 = file.write_at(HELLO, 0);
-        let write2 = file.write_at(HELLO, HELLO.len() as u64);
+        let write1 = file.write_at(HELLO.to_vec().into(), 0);
+        let write2 = file.write_at(HELLO.to_vec().into(), HELLO.len() as u64);
 
         let future1 = write1.link(write2).submit();
 
         let (res1, future2) = future1.await;
         let res2 = future2.await;
 
-        res1.0.unwrap();
-        res2.0.unwrap();
+        res1.unwrap();
+        res2.unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, [HELLO, HELLO].concat());

@@ -5,10 +5,9 @@ use std::{
 };
 
 use crate::{
-    buf::fixed::FixedBuf,
-    buf::{BoundedBuf, BoundedBufMut},
+    buf::{fixed::FixedBuf, BoundedBuf, BoundedBufMut, Buffer},
     io::{SharedFd, Socket},
-    UnsubmittedWrite,
+    Submit, Unsubmitted,
 };
 
 /// A TCP stream between a local and a remote socket.
@@ -29,7 +28,7 @@ use crate::{
 ///         let mut stream = TcpStream::connect("127.0.0.1:8080".parse().unwrap()).await?;
 ///
 ///         // Write some data.
-///         stream.write(b"hello world!".as_slice()).submit().await.unwrap();
+///         stream.write(b"hello world!".to_vec().into()).submit().await.unwrap();
 ///
 ///         Ok(())
 ///     })
@@ -74,7 +73,7 @@ impl TcpStream {
     /// Read some data from the stream into the buffer.
     ///
     /// Returns the original buffer and quantity of data read.
-    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::Result<usize, T> {
+    pub async fn read(&self, buf: Buffer) -> crate::Result<usize, Buffer> {
         self.inner.read(buf).await
     }
 
@@ -101,60 +100,8 @@ impl TcpStream {
     /// Write some data to the stream from the buffer.
     ///
     /// Returns the original buffer and quantity of data written.
-    pub fn write<T: BoundedBuf>(&self, buf: T) -> UnsubmittedWrite<T> {
+    pub fn write(&self, buf: Buffer) -> Unsubmitted {
         self.inner.write(buf)
-    }
-
-    /// Attempts to write an entire buffer to the stream.
-    ///
-    /// This method will continuously call [`write`] until there is no more data to be
-    /// written or an error is returned. This method will not return until the entire
-    /// buffer has been successfully written or an error has occurred.
-    ///
-    /// If the buffer contains no data, this will never call [`write`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return the first error that [`write`] returns.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use std::net::SocketAddr;
-    /// use tokio_uring::net::TcpListener;
-    /// use tokio_uring::buf::BoundedBuf;
-    ///
-    /// let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    ///
-    /// tokio_uring::start(async {
-    ///     let listener = TcpListener::bind(addr).unwrap();
-    ///
-    ///     println!("Listening on {}", listener.local_addr().unwrap());
-    ///
-    ///     loop {
-    ///         let (stream, _) = listener.accept().await.unwrap();
-    ///         tokio_uring::spawn(async move {
-    ///             let mut n = 0;
-    ///             let mut buf = vec![0u8; 4096];
-    ///             loop {
-    ///                 let (read, nbuf) = stream.read(buf).await.unwrap();
-    ///                 buf = nbuf;
-    ///                 if read == 0 {
-    ///                     break;
-    ///                 }
-    ///
-    ///                 let (_, slice) = stream.write_all(buf.slice(..read)).await.unwrap();
-    ///                 buf = slice.into_inner();
-    ///                 n += read;
-    ///             }
-    ///         });
-    ///     }
-    /// });
-    /// ```
-    ///
-    /// [`write`]: Self::write
-    pub async fn write_all<T: BoundedBuf>(&self, buf: T) -> crate::Result<(), T> {
-        self.inner.write_all(buf).await
     }
 
     /// Writes data into the socket from a registered buffer.
@@ -220,8 +167,8 @@ impl TcpStream {
     /// written to this writer.
     ///
     /// [`Ok(n)`]: Ok
-    pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::Result<usize, Vec<T>> {
-        self.inner.writev(buf).await
+    pub async fn writev(&self, buf: Buffer) -> crate::Result<usize, Buffer> {
+        self.inner.write(buf).submit().await
     }
 
     /// Shuts down the read, write, or both halves of this connection.

@@ -10,6 +10,7 @@ pub(crate) mod driver;
 pub(crate) use context::RuntimeContext;
 
 thread_local! {
+    #[allow(missing_docs)]
     pub static CONTEXT: RuntimeContext = const { RuntimeContext::new() };
 }
 

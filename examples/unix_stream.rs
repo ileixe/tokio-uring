@@ -13,12 +13,12 @@ fn main() {
 
     tokio_uring::start(async {
         let stream = UnixStream::connect(socket_addr).await.unwrap();
-        let buf = vec![1u8; 128];
+        let buf = vec![1u8; 128].into();
 
         let (n, buf) = stream.write(buf).submit().await.unwrap();
         println!("written: {}", n);
 
         let (read, buf) = stream.read(buf).await.unwrap();
-        println!("read: {:?}", &buf[..read]);
+        println!("read: {:?}", &buf[0][..read]);
     });
 }

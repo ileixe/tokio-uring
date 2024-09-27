@@ -1,8 +1,9 @@
-use crate::io::write::UnsubmittedWrite;
+use crate::buf::Buffer;
+use crate::io::read_write::Unsubmitted;
 use crate::runtime::driver::op::{Op, Submit};
 use crate::{
     buf::fixed::FixedBuf,
-    buf::{BoundedBuf, BoundedBufMut, IoBuf, Slice},
+    buf::{BoundedBuf, BoundedBufMut, Slice},
     io::SharedFd,
     UnsubmittedOneshot,
 };
@@ -43,44 +44,8 @@ impl Socket {
         Ok(Socket { fd })
     }
 
-    pub(crate) fn write<T: BoundedBuf>(&self, buf: T) -> UnsubmittedWrite<T> {
-        UnsubmittedOneshot::write_at(&self.fd, buf, 0)
-    }
-
-    pub async fn write_all<T: BoundedBuf>(&self, buf: T) -> crate::Result<(), T> {
-        let orig_bounds = buf.bounds();
-        match self.write_all_slice(buf.slice_full()).await {
-            Ok((x, buf)) => Ok((x, T::from_buf_bounds(buf, orig_bounds))),
-            Err(e) => Err(e.map(|buf| T::from_buf_bounds(buf, orig_bounds))),
-        }
-    }
-
-    async fn write_all_slice<T: IoBuf>(&self, mut buf: Slice<T>) -> crate::Result<(), T> {
-        while buf.bytes_init() != 0 {
-            let res = self.write(buf).submit().await;
-            match res {
-                Ok((0, slice)) => {
-                    return Err(crate::Error(
-                        std::io::Error::new(
-                            std::io::ErrorKind::WriteZero,
-                            "failed to write whole buffer",
-                        ),
-                        slice.into_inner(),
-                    ))
-                }
-                Ok((n, slice)) => {
-                    buf = slice.slice(n..);
-                }
-
-                // No match on an EINTR error is performed because this
-                // crate's design ensures we are not calling the 'wait' option
-                // in the ENTER syscall. Only an Enter with 'wait' can generate
-                // an EINTR according to the io_uring man pages.
-                Err(e) => return Err(e.map(|slice| slice.into_inner())),
-            }
-        }
-
-        Ok(((), buf.into_inner()))
+    pub(crate) fn write(&self, buf: Buffer) -> Unsubmitted {
+        Unsubmitted::write_at(&self.fd, buf, 0)
     }
 
     pub(crate) async fn write_fixed<T>(&self, buf: T) -> crate::Result<usize, T>
@@ -130,12 +95,6 @@ impl Socket {
         Ok(((), buf.into_inner()))
     }
 
-    pub async fn writev<T: BoundedBuf>(&self, bufs: Vec<T>) -> crate::Result<usize, Vec<T>> {
-        UnsubmittedOneshot::writev_at(&self.fd, bufs, 0)
-            .submit()
-            .await
-    }
-
     pub(crate) async fn send_to<T: BoundedBuf>(
         &self,
         buf: T,
@@ -170,7 +129,7 @@ impl Socket {
         op.await
     }
 
-    pub(crate) async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::Result<usize, T> {
+    pub(crate) async fn read(&self, buf: Buffer) -> crate::Result<usize, Buffer> {
         UnsubmittedOneshot::read_at(&self.fd, buf, 0).submit().await
     }
 
