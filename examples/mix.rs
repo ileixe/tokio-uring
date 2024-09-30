@@ -27,19 +27,14 @@ fn main() {
             tokio_uring::spawn(async move {
                 // Open the file without blocking
                 let file = File::open(path).await.unwrap();
-                let mut buf = vec![0; 16 * 1_024];
+                let mut buf = vec![0; 16 * 1_024].into();
 
                 // Track the current position in the file;
                 let mut pos = 0;
 
                 loop {
                     // Read a chunk
-<<<<<<< HEAD
-                    let (res, b) = file.read_at(buf, pos).submit().await;
-                    let n = res.unwrap();
-=======
-                    let (n, b) = file.read_at(buf, pos).await.unwrap();
->>>>>>> 6b5865f (Refresh: Update Result<T, B> to be Result<(T,B), Error<B>)
+                    let (n, b) = file.read_at(buf, pos).submit().await.unwrap();
 
                     if n == 0 {
                         break;

@@ -18,13 +18,13 @@ fn main() {
             let stream = listener.accept().await.unwrap();
             let socket_addr = socket_addr.clone();
             tokio_uring::spawn(async move {
-                let buf = vec![1u8; 128];
+                let buf = vec![1u8; 128].into();
 
                 let (n, buf) = stream.write(buf).submit().await.unwrap();
                 println!("written to {}: {}", &socket_addr, n);
 
                 let (read, buf) = stream.read(buf).await.unwrap();
-                println!("read from {}: {:?}", &socket_addr, &buf[..read]);
+                println!("read from {}: {:?}", &socket_addr, &buf[0][..read]);
             });
         }
     });

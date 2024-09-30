@@ -22,7 +22,7 @@ fn main() -> io::Result<()> {
                     let (stream, _) = listener.accept().await?;
 
                     tokio_uring::spawn(async move {
-                        let result = stream.write(RESPONSE).submit().await;
+                        let result = stream.write(RESPONSE.to_vec().into()).submit().await;
                         if let Err(err) = result {
                             eprintln!("Client connection failed: {}", err);
                         }

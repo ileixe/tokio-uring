@@ -17,14 +17,14 @@
 //!         // Open a file
 //!         let file = File::open("hello.txt").await?;
 //!
-//!         let buf = vec![0; 4096];
+//!         let buf = vec![0; 4096].into();
 //!         // Read some data, the buffer is passed by ownership and
 //!         // submitted to the kernel. When the operation completes,
 //!         // we get the buffer back.
 //!         let (n, buf) = file.read_at(buf, 0).submit().await?;
 //!
 //!         // Display the contents
-//!         println!("{:?}", &buf[..n]);
+//!         println!("{:?}", &buf[0][..n]);
 //!
 //!         Ok(())
 //!     })
@@ -55,7 +55,6 @@
 //! will happen in the background. There is no guarantee as to **when** the
 //! implicit close-on-drop operation happens, so it is recommended to explicitly
 //! call `close()`.
-
 #![warn(missing_docs)]
 
 macro_rules! syscall {
@@ -80,10 +79,8 @@ pub mod buf;
 pub mod fs;
 pub mod net;
 
-pub use io::read::*;
-pub use io::readv::*;
-pub use io::write::*;
-pub use io::writev::*;
+pub use buf::Buffer;
+pub use io::read_write::*;
 pub use runtime::driver::op::{
     InFlightOneshot, Link, LinkedInFlightOneshot, OneshotOutputTransform, Submit,
     UnsubmittedOneshot,
@@ -121,14 +118,14 @@ use std::future::Future;
 ///         // Open a file
 ///         let file = File::open("hello.txt").await?;
 ///
-///         let buf = vec![0; 4096];
+///         let buf = vec![0; 4096].into();
 ///         // Read some data, the buffer is passed by ownership and
 ///         // submitted to the kernel. When the operation completes,
 ///         // we get the buffer back.
 ///         let (n, buf) = file.read_at(buf, 0).submit().await?;
 ///
 ///         // Display the contents
-///         println!("{:?}", &buf[..n]);
+///         println!("{:?}", &buf[0][..n]);
 ///
 ///         Ok(())
 ///     })

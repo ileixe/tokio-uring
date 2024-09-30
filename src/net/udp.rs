@@ -1,8 +1,7 @@
 use crate::{
-    buf::fixed::FixedBuf,
-    buf::{BoundedBuf, BoundedBufMut},
+    buf::{fixed::FixedBuf, BoundedBuf, BoundedBufMut, Buffer},
     io::{SharedFd, Socket},
-    UnsubmittedWrite,
+    Unsubmitted,
 };
 use socket2::SockAddr;
 use std::{
@@ -41,15 +40,15 @@ use std::{
 ///         socket.connect(second_addr).await.unwrap();
 ///         other_socket.connect(first_addr).await.unwrap();
 ///
-///         let buf = vec![0; 32];
+///         let buf = vec![0; 32].into();
 ///
 ///         // write data
-///         socket.write(b"hello world".as_slice()).submit().await.unwrap();
+///         socket.write(b"hello world".to_vec().into()).submit().await.unwrap();
 ///
 ///         // read data
 ///         let (n_bytes, buf) = other_socket.read(buf).await.unwrap();
 ///
-///         assert_eq!(b"hello world", &buf[..n_bytes]);
+///         assert_eq!(b"hello world", &buf[0][..n_bytes]);
 ///
 ///         // write data using send on connected socket
 ///         socket.send(b"hello world via send".as_slice()).await.unwrap();
@@ -57,7 +56,7 @@ use std::{
 ///         // read data
 ///         let (n_bytes, buf) = other_socket.read(buf).await.unwrap();
 ///
-///         assert_eq!(b"hello world via send", &buf[..n_bytes]);
+///         assert_eq!(b"hello world via send", &buf[0][..n_bytes]);
 ///
 ///         Ok(())
 ///     })
@@ -310,7 +309,7 @@ impl UdpSocket {
     /// Reads a packet of data from the socket into the buffer.
     ///
     /// Returns the original buffer and quantity of data read.
-    pub async fn read<T: BoundedBufMut>(&self, buf: T) -> crate::Result<usize, T> {
+    pub async fn read(&self, buf: Buffer) -> crate::Result<usize, Buffer> {
         self.inner.read(buf).await
     }
 
@@ -337,7 +336,7 @@ impl UdpSocket {
     /// Writes data into the socket from the specified buffer.
     ///
     /// Returns the original buffer and quantity of data written.
-    pub fn write<T: BoundedBuf>(&self, buf: T) -> UnsubmittedWrite<T> {
+    pub fn write(&self, buf: Buffer) -> Unsubmitted {
         self.inner.write(buf)
     }
 

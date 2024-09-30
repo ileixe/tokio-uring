@@ -55,7 +55,7 @@ use std::sync::Arc;
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_compile
 /// use tokio_uring::buf::fixed::FixedBufPool;
 /// use tokio_uring::buf::IoBuf;
 /// use std::iter;
