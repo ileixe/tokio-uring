@@ -8,6 +8,7 @@ pub mod fixed;
 
 mod io_buf;
 use std::{
+    convert::TryFrom,
     iter::zip,
     mem::ManuallyDrop,
     ops::{Index, IndexMut},
@@ -23,6 +24,8 @@ pub use slice::Slice;
 
 mod bounded;
 pub use bounded::{BoundedBuf, BoundedBufMut};
+
+use crate::Error;
 
 pub(crate) fn deref(buf: &impl IoBuf) -> &[u8] {
     // Safety: the `IoBuf` trait is marked as unsafe and is expected to be
@@ -41,6 +44,9 @@ pub struct Buffer {
     iovecs: Vec<libc::iovec>,
     state: Vec<BufferState>,
 }
+
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
 
 impl Buffer {
     fn new(iovecs: Vec<libc::iovec>, state: Vec<BufferState>) -> Self {
@@ -64,6 +70,9 @@ impl Buffer {
 pub(crate) struct BufferState {
     total_bytes: usize,
     dtor: unsafe fn(libc::iovec, usize),
+    // 0: Unknown
+    // 1: From Vec
+    source: u8,
 }
 
 impl Drop for Buffer {
@@ -79,8 +88,12 @@ impl Drop for Buffer {
 }
 
 impl BufferState {
-    fn new(total_bytes: usize, dtor: unsafe fn(libc::iovec, usize)) -> Self {
-        BufferState { total_bytes, dtor }
+    fn new(total_bytes: usize, dtor: unsafe fn(libc::iovec, usize), source: u8) -> Self {
+        BufferState {
+            total_bytes,
+            dtor,
+            source,
+        }
     }
 }
 
@@ -96,7 +109,7 @@ impl From<Vec<u8>> for Buffer {
             iov_len,
         };
 
-        let state = BufferState::new(total_bytes, drop_vec);
+        let state = BufferState::new(total_bytes, drop_vec, 1);
         Buffer::new(vec![iov], vec![state])
     }
 }
@@ -118,13 +131,77 @@ impl From<Vec<Vec<u8>>> for Buffer {
                 iov_len,
             };
 
-            let state = BufferState::new(total_bytes, drop_vec);
+            let state = BufferState::new(total_bytes, drop_vec, 1);
 
             iovecs.push(iov);
             states.push(state);
         }
 
         Buffer::new(iovecs, states)
+    }
+}
+
+impl TryFrom<Buffer> for Vec<u8> {
+    type Error = Error<Buffer>;
+
+    fn try_from(buf: Buffer) -> Result<Self, Self::Error> {
+        if buf.len() != 1 {
+            return Err(Error(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "length of vector of this Buffer must be 1",
+                ),
+                buf,
+            ));
+        }
+
+        if buf.state[0].source != 1 {
+            return Err(Error(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "the source of this Buffer is not Vec",
+                ),
+                buf,
+            ));
+        }
+
+        let this = ManuallyDrop::new(buf);
+        Ok(unsafe {
+            Vec::from_raw_parts(
+                this.iovecs[0].iov_base as _,
+                this.iovecs[0].iov_len,
+                this.state[0].total_bytes,
+            )
+        })
+    }
+}
+
+impl TryFrom<Buffer> for Vec<Vec<u8>> {
+    type Error = Error<Buffer>;
+
+    fn try_from(buf: Buffer) -> Result<Self, Self::Error> {
+        if buf.state.iter().any(|state| state.source != 1) {
+            return Err(Error(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "the source of any vector of this Buffer is not Vec",
+                ),
+                buf,
+            ));
+        }
+
+        let this = ManuallyDrop::new(buf);
+        let mut vecs = Vec::with_capacity(this.iovecs.len());
+        for i in 0..this.iovecs.len() {
+            vecs.push(unsafe {
+                Vec::from_raw_parts(
+                    this.iovecs[i].iov_base as _,
+                    this.iovecs[i].iov_len,
+                    this.state[i].total_bytes,
+                )
+            });
+        }
+        Ok(vecs)
     }
 }
 
