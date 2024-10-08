@@ -39,6 +39,12 @@ pub(crate) fn deref_mut(buf: &mut impl IoBufMut) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(buf.stable_mut_ptr(), buf.bytes_init()) }
 }
 
+#[derive(Debug, PartialEq)]
+enum BufferSource {
+    RawPtr,
+    Vector,
+}
+
 #[allow(missing_docs)]
 pub struct Buffer {
     iovecs: Vec<libc::iovec>,
@@ -64,15 +70,23 @@ impl Buffer {
             iovec.iov_len = state.total_bytes;
         }
     }
+
+    #[allow(missing_docs)]
+    pub unsafe fn from_raw_ptr(ptr: u64, len: usize) -> Self {
+        let iov = libc::iovec {
+            iov_base: ptr as _,
+            iov_len: len,
+        };
+        let state = BufferState::new(len, fake_drop_vec, BufferSource::RawPtr);
+        Self::new(vec![iov], vec![state])
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct BufferState {
     total_bytes: usize,
     dtor: unsafe fn(libc::iovec, usize),
-    // 0: Unknown
-    // 1: From Vec
-    source: u8,
+    source: BufferSource,
 }
 
 impl Drop for Buffer {
@@ -88,7 +102,7 @@ impl Drop for Buffer {
 }
 
 impl BufferState {
-    fn new(total_bytes: usize, dtor: unsafe fn(libc::iovec, usize), source: u8) -> Self {
+    fn new(total_bytes: usize, dtor: unsafe fn(libc::iovec, usize), source: BufferSource) -> Self {
         BufferState {
             total_bytes,
             dtor,
@@ -109,7 +123,7 @@ impl From<Vec<u8>> for Buffer {
             iov_len,
         };
 
-        let state = BufferState::new(total_bytes, drop_vec, 1);
+        let state = BufferState::new(total_bytes, drop_vec, BufferSource::Vector);
         Buffer::new(vec![iov], vec![state])
     }
 }
@@ -131,7 +145,7 @@ impl From<Vec<Vec<u8>>> for Buffer {
                 iov_len,
             };
 
-            let state = BufferState::new(total_bytes, drop_vec, 1);
+            let state = BufferState::new(total_bytes, drop_vec, BufferSource::Vector);
 
             iovecs.push(iov);
             states.push(state);
@@ -155,7 +169,7 @@ impl TryFrom<Buffer> for Vec<u8> {
             ));
         }
 
-        if buf.state[0].source != 1 {
+        if buf.state[0].source != BufferSource::Vector {
             return Err(Error(
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
@@ -180,7 +194,11 @@ impl TryFrom<Buffer> for Vec<Vec<u8>> {
     type Error = Error<Buffer>;
 
     fn try_from(buf: Buffer) -> Result<Self, Self::Error> {
-        if buf.state.iter().any(|state| state.source != 1) {
+        if buf
+            .state
+            .iter()
+            .any(|state| state.source != BufferSource::Vector)
+        {
             return Err(Error(
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
@@ -204,6 +222,8 @@ impl TryFrom<Buffer> for Vec<Vec<u8>> {
         Ok(vecs)
     }
 }
+
+unsafe fn fake_drop_vec(_iovec: libc::iovec, _total_bytes: usize) {}
 
 unsafe fn drop_vec(iovec: libc::iovec, total_bytes: usize) {
     Vec::from_raw_parts(iovec.iov_base as _, iovec.iov_len, total_bytes);
