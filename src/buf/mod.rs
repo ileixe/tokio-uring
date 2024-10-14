@@ -56,6 +56,7 @@ unsafe impl Sync for Buffer {}
 
 impl Buffer {
     fn new(iovecs: Vec<libc::iovec>, state: Vec<BufferState>) -> Self {
+        assert_eq!(iovecs.len(), state.len());
         Buffer { iovecs, state }
     }
 
