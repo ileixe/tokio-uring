@@ -12,6 +12,7 @@ use std::{
     iter::zip,
     mem::ManuallyDrop,
     ops::{Index, IndexMut},
+    ptr,
 };
 
 pub use io_buf::IoBuf;
@@ -66,6 +67,11 @@ impl Buffer {
     }
 
     #[allow(missing_docs)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[allow(missing_docs)]
     pub fn fill(&mut self) {
         for (iovec, state) in zip(&mut self.iovecs, &self.state) {
             iovec.iov_len = state.total_bytes;
@@ -77,13 +83,19 @@ impl Buffer {
         self.iovecs.iter()
     }
 
+    #[allow(clippy::missing_safety_doc)]
     #[allow(missing_docs)]
-    pub unsafe fn from_raw_ptr(ptr: u64, len: usize) -> Self {
+    pub unsafe fn from_raw_parts(
+        ptr: *mut u8,
+        len: usize,
+        dtor: unsafe fn(libc::iovec, usize, *const ()),
+        user_data: *const (),
+    ) -> Self {
         let iov = libc::iovec {
             iov_base: ptr as _,
             iov_len: len,
         };
-        let state = BufferState::new(len, drop_raw_ptr, BufferSource::RawPtr);
+        let state = BufferState::new(len, dtor, user_data, BufferSource::RawPtr);
         Self::new(vec![iov], vec![state])
     }
 }
@@ -91,8 +103,9 @@ impl Buffer {
 #[derive(Debug)]
 pub(crate) struct BufferState {
     total_bytes: usize,
-    dtor: unsafe fn(libc::iovec, usize),
+    dtor: unsafe fn(libc::iovec, usize, *const ()),
     source: BufferSource,
+    user_data: *const (),
 }
 
 impl Drop for Buffer {
@@ -102,16 +115,22 @@ impl Drop for Buffer {
             state,
         } = self;
         for i in 0..iovec.len() {
-            unsafe { (state[i].dtor)(iovec[i], state[i].total_bytes) }
+            unsafe { (state[i].dtor)(iovec[i], state[i].total_bytes, state[i].user_data) }
         }
     }
 }
 
 impl BufferState {
-    fn new(total_bytes: usize, dtor: unsafe fn(libc::iovec, usize), source: BufferSource) -> Self {
+    fn new(
+        total_bytes: usize,
+        dtor: unsafe fn(libc::iovec, usize, *const ()),
+        user_data: *const (),
+        source: BufferSource,
+    ) -> Self {
         BufferState {
             total_bytes,
             dtor,
+            user_data,
             source,
         }
     }
@@ -129,7 +148,7 @@ impl From<Vec<u8>> for Buffer {
             iov_len,
         };
 
-        let state = BufferState::new(total_bytes, drop_vec, BufferSource::Vector);
+        let state = BufferState::new(total_bytes, drop_vec, ptr::null(), BufferSource::Vector);
         Buffer::new(vec![iov], vec![state])
     }
 }
@@ -151,7 +170,7 @@ impl From<Vec<Vec<u8>>> for Buffer {
                 iov_len,
             };
 
-            let state = BufferState::new(total_bytes, drop_vec, BufferSource::Vector);
+            let state = BufferState::new(total_bytes, drop_vec, ptr::null(), BufferSource::Vector);
 
             iovecs.push(iov);
             states.push(state);
@@ -229,9 +248,7 @@ impl TryFrom<Buffer> for Vec<Vec<u8>> {
     }
 }
 
-unsafe fn drop_raw_ptr(_iovec: libc::iovec, _total_bytes: usize) {}
-
-unsafe fn drop_vec(iovec: libc::iovec, total_bytes: usize) {
+unsafe fn drop_vec(iovec: libc::iovec, total_bytes: usize, _user_data: *const ()) {
     Vec::from_raw_parts(iovec.iov_base as _, iovec.iov_len, total_bytes);
 }
 
